@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
-import connectToDatabase from '@/utils/connectToDatabase';
-import { sendPaymentReminder } from '@/services/reminderService';
-
+import { connectToDatabase } from '@/app/utils/database';
+import { sendPaymentReminder } from '../services/route';
 export async function GET() {
   try {
     const client = await connectToDatabase();
