@@ -2,7 +2,6 @@
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 ;
-console.log(uri)
 
 let cachedClient = null;
 const uri = process.env.MONGODB_URI;
