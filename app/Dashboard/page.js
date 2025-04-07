@@ -21,17 +21,17 @@ export default function Dashboard() {
   
   // API Data Fetching
   const { data: metricsData, error: metricsError } = useSWR(
-    'http://localhost:3000/apis/metrics', 
+    `${process.env.NEXTAUTH_URL}/apis/metrics`, 
     fetcher
   )
 
   const { data: invoicesData, error: invoicesError } = useSWR(
-    'http://localhost:3000/apis/invoices',
+    `${process.env.NEXTAUTH_URL}/apis/invoices`, 
     fetcher
   )
 
   const { data: chartData, error: chartError } = useSWR(
-    'http://localhost:3000/apis/chart-data',
+    `${process.env.NEXTAUTH_URL}/apis/chart-data`, 
     fetcher
   )
 
