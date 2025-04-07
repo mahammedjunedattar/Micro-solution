@@ -1,6 +1,7 @@
 import { MongoClient } from 'mongodb'
 
-const uri = process.env.MONGODB_URI
+const uri ="mongodb+srv://junedattar455:Abbaammi123@cluster0.ladkaob.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0"
+
 if (!uri) throw new Error('Define MONGODB_URI')
 
 let cachedClient = null
