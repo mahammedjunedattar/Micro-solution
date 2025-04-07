@@ -10,12 +10,16 @@ const uri = process.env.MONGODB_URI
 let cachedDb = null
 
 async function connectToDatabase() {
-  if (cachedDb) return cachedDb
-  
-  const client = new MongoClient(uri)
-  await client.connect()
-  cachedDb = client.db('invoice')
-  return cachedDb
+  if (cachedDb) return cachedDb;
+
+  const client = new MongoClient(uri, {
+    useNewUrlParser: true,
+    useUnifiedTopology: true,
+  });
+
+  await client.connect();
+  cachedDb = client.db('invoice');  // Return database instance directly
+  return cachedDb;
 }
 
 export async function GET(request) {
