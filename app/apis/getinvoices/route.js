@@ -3,6 +3,8 @@ import { getServerSession } from 'next-auth/next'
 import { ObjectId } from 'mongodb'
 import { MongoClient } from 'mongodb'
 import { authOptions } from '@/app/api/auth/[...nextauth]/route'
+import { useSession } from 'next-auth/react';
+
 
 const uri = process.env.MONGODB_URI
 
@@ -29,6 +31,9 @@ export async function GET(request) {
     const db = await connectToDatabase()
     
     // Convert string ID to ObjectId for query
+          const { data: session } = useSession();
+      const userId = session?.user?.id;
+
 
     const rawInvoices = await db.collection('invoice-collection')
       .find({ 
