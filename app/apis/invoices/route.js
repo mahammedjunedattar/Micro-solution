@@ -4,11 +4,11 @@ import { authOptions } from "@/app/api/auth/[...nextauth]/route"
 export async function GET(req) {
   const session = await getServerSession(authOptions)
 
-  if (!session || !session.user?.email) {
+  if (!session || !session.user?.id) {
     return Response.json({ error: "Unauthorized" }, { status: 401 })
   }
 
-  const userEmail = session.user.email
+  const userEmail = session.user.id
   const { db } = await connectToDatabase()
 
   const { searchParams } = new URL(req.url)
