@@ -1,8 +1,11 @@
-// components/InvoiceWizard.js
+'use client';
 import { useDropzone } from 'react-dropzone';
 import { useImmer } from 'use-immer';
 import { Button } from './button/button';
 import { parseCSV } from '@/app/utils/csvParser';
+import { useSession } from 'next-auth/react';
+import { useState } from 'react';
+
 const BrandCustomizer = ({ settings, onChange }) => {
   const handleLogoUpload = (e) => {
     const file = e.target.files[0];
@@ -14,6 +17,7 @@ const BrandCustomizer = ({ settings, onChange }) => {
       reader.readAsDataURL(file);
     }
   };
+
   return (
     <div className="mb-8 space-y-6">
       <div>
@@ -66,13 +70,19 @@ const InvoicePreview = ({ client, brandSettings }) => {
   if (!client) return null;
 
   return (
-    <div className="border rounded-lg p-6 mb-8" style={{ borderColor: brandSettings.primaryColor }}>
+    <div
+      className="border rounded-lg p-6 mb-8"
+      style={{ borderColor: brandSettings.primaryColor }}
+    >
       <div className="flex justify-between items-start mb-6">
         {brandSettings.logo && (
           <img src={brandSettings.logo} alt="Company Logo" className="h-12" />
         )}
         <div>
-          <h2 className="text-2xl font-bold" style={{ color: brandSettings.primaryColor }}>
+          <h2
+            className="text-2xl font-bold"
+            style={{ color: brandSettings.primaryColor }}
+          >
             INVOICE
           </h2>
           <p className="text-gray-600">Date: {new Date().toLocaleDateString()}</p>
@@ -87,20 +97,52 @@ const InvoicePreview = ({ client, brandSettings }) => {
         </div>
         <div>
           <h3 className="font-semibold text-gray-900 mb-2">Amount Due:</h3>
-          <p className="text-2xl font-bold" style={{ color: brandSettings.primaryColor }}>
+          <p
+            className="text-2xl font-bold"
+            style={{ color: brandSettings.primaryColor }}
+          >
             ${client.amount.toFixed(2)}
           </p>
-          <p className="text-gray-600">Due: {client.dueDate.toLocaleDateString()}</p>
+          <p className="text-gray-600">
+            Due: {client.dueDate.toLocaleDateString()}
+          </p>
         </div>
       </div>
 
-      <div className="border-t pt-4">
+      {client.items?.length > 0 && (
+        <div className="mt-4">
+          <h3 className="font-semibold text-gray-900 mb-2">Items</h3>
+          <table className="w-full text-sm text-left border">
+            <thead>
+              <tr className="bg-gray-100">
+                <th className="p-2 border">Description</th>
+                <th className="p-2 border">Qty</th>
+                <th className="p-2 border">Rate</th>
+                <th className="p-2 border">Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              {client.items.map((item, idx) => (
+                <tr key={idx}>
+                  <td className="p-2 border">{item.name}</td>
+                  <td className="p-2 border">{item.qty}</td>
+                  <td className="p-2 border">${item.rate}</td>
+                  <td className="p-2 border">
+                    ${(item.qty * item.rate).toFixed(2)}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      <div className="border-t pt-4 mt-4">
         <p className="text-gray-600">{brandSettings.paymentTerms}</p>
       </div>
     </div>
   );
 };
-
 
 export default function InvoiceWizard() {
   const [state, setState] = useImmer({
@@ -109,67 +151,90 @@ export default function InvoiceWizard() {
     brandSettings: {
       logo: null,
       primaryColor: '#4F46E5',
-      paymentTerms: 'Due 30 days after receipt'
-    }
+      paymentTerms: 'Due 30 days after receipt',
+    },
   });
+
+  const [loading, setLoading] = useState(false);
+  const [success, setSuccess] = useState(false);
 
   const { getRootProps, getInputProps } = useDropzone({
     accept: { 'text/csv': ['.csv'] },
-    onDrop: files => handleCSVUpload(files[0])
+    onDrop: (files) => handleCSVUpload(files[0]),
   });
 
   const handleCSVUpload = async (file) => {
     if (!(file instanceof Blob)) {
-        console.error('Uploaded file is not a valid CSV file.');
-        return;
+      console.error('Uploaded file is not a valid CSV file.');
+      return;
     }
 
     try {
-        const csvData = await parseCSV(file);
-        setState(draft => {
-            draft.step = 2;
-            draft.clients = csvData.map(client => ({
-                ...client,
-                amount: parseFloat(client.amount),
-                dueDate: new Date(client.dueDate)
-            }));
-            draft.csvFile = file; // Store file for FormData
-        });
+      const csvData = await parseCSV(file);
+      setState((draft) => {
+        draft.step = 2;
+        draft.clients = csvData.map((client) => ({
+          ...client,
+          amount: parseFloat(client.amount),
+          dueDate: new Date(client.dueDate),
+          items: [
+            { name: 'Design Services', qty: 2, rate: 50 },
+            { name: 'Hosting Fee', qty: 1, rate: 100 },
+          ],
+        }));
+        draft.csvFile = file;
+      });
     } catch (error) {
-        console.error('Error parsing CSV:', error);
+      console.error('Error parsing CSV:', error);
     }
-};
+  };
 
-const handleSendInvoices = async () => {
-  try {
+  const handleSendInvoices = async () => {
+    setLoading(true);
+    setSuccess(false);
+    try {
       const formData = new FormData();
+      const { data: session } = useSession();
+      const userId = session?.user?.id;
 
-      // Append necessary data
+      if (!session) {
+        alert('Please log in to send invoices.');
+        setLoading(false);
+        return;
+      }
+
       formData.append('clients', JSON.stringify(state.clients));
       formData.append('brandSettings', JSON.stringify(state.brandSettings));
-
-      // Ensure user data is added
-      formData.append('user', JSON.stringify({
-        _id: 'USER_ID', // Replace with dynamic value if available
-        businessName: 'Your Business Name'  // Include other required fields
-      }));
+      formData.append(
+        'user',
+        JSON.stringify({
+          _id: userId,
+          businessName: 'Your Business Name',
+        })
+      );
 
       const response = await fetch('/apis/invoice', {
-          method: 'POST',
-          body: formData, 
+        method: 'POST',
+        body: formData,
       });
 
       const result = await response.json();
       console.log('Invoice response:', result);
-  } catch (error) {
+      setSuccess(true);
+    } catch (error) {
       console.error('Error sending invoices:', error);
-  }
-};
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <div className="max-w-4xl mx-auto p-6">
       {state.step === 1 && (
-        <div {...getRootProps()} className="border-2 border-dashed p-8 text-center">
+        <div
+          {...getRootProps()}
+          className="border-2 border-dashed p-8 text-center cursor-pointer"
+        >
           <input {...getInputProps()} />
           <p>Drag CSV file here or click to upload</p>
           <small>Required columns: name, email, amount, dueDate</small>
@@ -178,23 +243,46 @@ const handleSendInvoices = async () => {
 
       {state.step === 2 && (
         <div>
-          <BrandCustomizer 
+          <BrandCustomizer
             settings={state.brandSettings}
-            onChange={updates => setState(draft => {
-              draft.brandSettings = { ...draft.brandSettings, ...updates }
-            })}
+            onChange={(updates) =>
+              setState((draft) => {
+                draft.brandSettings = {
+                  ...draft.brandSettings,
+                  ...updates,
+                };
+              })
+            }
           />
-          
-          <InvoicePreview 
-            client={state.clients[0]} 
+
+          <InvoicePreview
+            client={state.clients[0]}
             brandSettings={state.brandSettings}
           />
 
+          {loading && (
+            <div className="text-center my-4 text-indigo-600 font-medium animate-pulse">
+              Sending invoices...
+            </div>
+          )}
+
+          {success && (
+            <div className="text-green-600 my-4 text-center font-semibold">
+              ✅ Invoices sent successfully!
+            </div>
+          )}
+
           <div className="mt-8 flex gap-4">
-            <Button onClick={() => setState(draft => { draft.step = 1 })}>
+            <Button
+              onClick={() =>
+                setState((draft) => {
+                  draft.step = 1;
+                })
+              }
+            >
               Back
             </Button>
-            <Button onClick={handleSendInvoices}>
+            <Button onClick={handleSendInvoices} disabled={loading}>
               Send to {state.clients.length} Clients
             </Button>
           </div>
