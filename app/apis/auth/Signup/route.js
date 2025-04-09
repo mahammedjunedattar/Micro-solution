@@ -53,7 +53,7 @@ export async function POST(request) {
     });
 
     const tokenData = { id: user.insertedId };
-    const jwtSecret = 'Abbaammi@123';
+    const jwtSecret = process.env.JWT_SECRET;
 
     if (!jwtSecret) {
       return NextResponse.json({ error: 'JWT_SECRET environment variable is missing' }, { status: 500 });
