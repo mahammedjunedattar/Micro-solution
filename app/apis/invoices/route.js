@@ -1,29 +1,47 @@
-import { NextResponse } from "next/server";
-import { connectToDatabase } from "@/app/utils/database";
+import { connectToDatabase } from "@/app/utils/database"
+import { getServerSession } from "next-auth"
+import { authOptions } from "@/app/api/auth/[...nextauth]/route"
+export async function GET(req) {
+  const session = await getServerSession(authOptions)
 
-export async function GET() {
+  if (!session || !session.user?.email) {
+    return Response.json({ error: "Unauthorized" }, { status: 401 })
+  }
+
+  const userEmail = session.user.email
+  const { db } = await connectToDatabase()
+
+  const { searchParams } = new URL(req.url)
+  const filter = searchParams.get("filter") || "all"
+  const sort = searchParams.get("sort") || "dueDate"
+  const search = searchParams.get("search") || ""
+
+  let query = { userEmail } // Only fetch user's own invoices
+
+  if (filter !== "all") {
+    query.status = filter
+  }
+
+  if (search) {
+    query.$or = [
+      { "client.name": new RegExp(search, "i") },
+      { number: new RegExp(search, "i") }
+    ]
+  }
+
+  let sortOption = { dueDate: 1 }
+  if (sort === "amount") sortOption = { amount: -1 }
+  if (sort === "client") sortOption = { "client.name": 1 }
+
   try {
-    const { db } = await connectToDatabase(); // Ensure correct destructuring
+    const invoices = await db.collection("invoice-collection")
+      .find(query)
+      .sort(sortOption)
+      .toArray()
 
-    const recentInvoices = await db.collection("invoice-collection")
-    .find()
-    .sort({ createdAt: -1 }) // Sorts by 'createdAt' in descending order
-    .limit(5) // Limits the results to 5 invoices
-    .project({
-      _id: 1, 
-      clientName: "$client.name", // Extracts 'name' from 'client' object
-      amount: "$client.amount", // Extracts 'amount' from 'client' object
-      dueDate: "$client.dueDate",
-      status: 1,
-      createdAt: 1,
-    })
-    .toArray();
-    return NextResponse.json(recentInvoices);
+    return Response.json(invoices, { status: 200 })
   } catch (error) {
-    console.error("Recent Invoices API Error:", error);
-    return NextResponse.json(
-      { error: "Failed to fetch recent invoices" },
-      { status: 500 }
-    );
+    return Response.json({ error: "Failed to fetch invoices" }, { status: 500 })
   }
 }
+
