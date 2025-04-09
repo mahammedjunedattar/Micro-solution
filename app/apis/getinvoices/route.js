@@ -37,7 +37,7 @@ export async function GET(request) {
 
     const rawInvoices = await db.collection('invoice-collection')
       .find({ 
-        user: 'USER_ID',
+        user:  userId,
         pdfId: new ObjectId('67d133a2a9934c77a06aeacd')
       })
       .project({
