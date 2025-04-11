@@ -1,14 +1,18 @@
 import { connectToDatabase } from "@/app/utils/database";
-import { getSession } from "next-auth/react";
-
+import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+import { getServerSession } from "next-auth";
 export async function GET(req) {
   const { db } = await connectToDatabase();
 
   try {
     // Get authenticated user
-    const session = await getSession({ req });
+    const session = await getServerSession(authOptions);
     
-    if (!session?.user?.email) {
+    if (!session?.user?.id) {
+      return Response.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    if (!session?.user?.id) {
       return Response.json({ error: "Unauthorized" }, { status: 401 });
     }
 
