@@ -1,34 +1,62 @@
 import { connectToDatabase } from "@/app/utils/database";
+import { getSession } from "next-auth/react";
 
 export async function GET(req) {
   const { db } = await connectToDatabase();
 
   try {
-    // Total Unpaid Amount
-
-    const totalUnpaid = await db.collection('invoice-collection').aggregate([
-      { $match: { status: { $in: ['sent', 'pending'] } } }, // Include 'sent' as unpaid
-      { $group: { _id: null, total: { $sum: '$amount' } } }
-    ]).toArray()
+    // Get authenticated user
+    const session = await getSession({ req });
     
-    console.log("Total Unpaid:", totalUnpaid);
+    if (!session?.user?.email) {
+      return Response.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    // Find user in database
+    const user = await db.collection('users').findOne({
+      user: session.user.id
+    });
+
+    if (!user) {
+      return Response.json({ error: "User not found" }, { status: 404 });
+    }
+
+    // Common match filter for user's documents
+    const userFilter = { userId: user._id };
+
+    // Total Unpaid Amount
+    const totalUnpaid = await db.collection('invoice-collection').aggregate([
+      { 
+        $match: { 
+          ...userFilter,
+          status: { $in: ['sent', 'pending'] } 
+        } 
+      },
+      { $group: { _id: null, total: { $sum: '$amount' } } }
+    ]).toArray();
 
     // Overdue Invoices Count
     const overdueInvoices = await db.collection('invoice-collection').countDocuments({
+      ...userFilter,
       status: 'pending',
       dueDate: { $lt: new Date() }
     });
 
-    console.log("Overdue Invoices:", overdueInvoices);
-
     // Average Payment Time
     const paymentTimes = await db.collection('invoice-collection').aggregate([
-      { $match: { status: 'paid', paidAt: { $exists: true }, createdAt: { $exists: true } } },
+      { 
+        $match: { 
+          ...userFilter,
+          status: 'paid', 
+          paidAt: { $exists: true }, 
+          createdAt: { $exists: true } 
+        } 
+      },
       { $project: { 
           days: { 
             $divide: [
               { $subtract: ["$paidAt", "$createdAt"] },
-              1000 * 60 * 60 * 24 // Convert milliseconds to days
+              1000 * 60 * 60 * 24
             ] 
           } 
         } 
@@ -36,23 +64,21 @@ export async function GET(req) {
       { $group: { _id: null, avg: { $avg: "$days" } } }
     ]).toArray();
 
-    console.log("Average Payment Time:", paymentTimes);
-
     // Paid This Month
     const startOfMonth = new Date();
     startOfMonth.setDate(1);
     startOfMonth.setHours(0, 0, 0, 0);
 
     const paidThisMonth = await db.collection('invoice-collection').aggregate([
-      { $match: { 
+      { 
+        $match: { 
+          ...userFilter,
           status: 'paid',
           paidAt: { $gte: startOfMonth } 
         } 
       },
       { $group: { _id: null, total: { $sum: "$amount" } } }
     ]).toArray();
-
-    console.log("Paid This Month:", paidThisMonth);
 
     return Response.json({
       totalUnpaid: totalUnpaid[0]?.total || 0,
