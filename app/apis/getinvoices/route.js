@@ -1,15 +1,12 @@
-import { NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth/next'
-import { ObjectId } from 'mongodb'
-import { MongoClient } from 'mongodb'
-import { authOptions } from '@/app/api/auth/[...nextauth]/route'
-import { useSession } from 'next-auth/react';
+import { NextResponse } from 'next/server';
+import { getServerSession } from 'next-auth/next';
+import { ObjectId } from 'mongodb';
+import { MongoClient } from 'mongodb';
+import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 
+const uri = process.env.MONGODB_URI;
 
-const uri = process.env.MONGODB_URI
-
-// Simplified connection handling with connection pooling
-let cachedDb = null
+let cachedDb = null;
 
 async function connectToDatabase() {
   if (cachedDb) return cachedDb;
@@ -20,24 +17,25 @@ async function connectToDatabase() {
   });
 
   await client.connect();
-  cachedDb = client.db('invoice');  // Return database instance directly
+  cachedDb = client.db('invoice');
   return cachedDb;
 }
 
 export async function GET(request) {
   try {
-    // Verify user session
+    const session = await getServerSession(authOptions);
 
-    const db = await connectToDatabase()
-    
-    // Convert string ID to ObjectId for query
-          const { data: session } = useSession();
-      const userId = session?.user?.id;
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
 
+    const db = await connectToDatabase();
+
+    const userId = session.user.id;
 
     const rawInvoices = await db.collection('invoice-collection')
       .find({ 
-        user:  userId,
+        user: userId,
         pdfId: new ObjectId('67d133a2a9934c77a06aeacd')
       })
       .project({
@@ -51,11 +49,9 @@ export async function GET(request) {
         createdAt: 1
       })
       .sort({ dueDate: 1 })
-      .toArray()
+      .toArray();
 
-    // 2. Add validation for MongoDB data types
     const safeInvoices = rawInvoices.map(doc => {
-      // Handle potential missing fields
       const safeDoc = {
         _id: doc._id?.toString() || '',
         pdfId: doc.pdfId?.toString() || '',
@@ -68,27 +64,26 @@ export async function GET(request) {
         status: doc.status || 'draft',
         reminders: doc.reminders || [],
         createdAt: doc.createdAt?.toISOString() || new Date().toISOString()
-      }
-      
-      // Log problematic documents
-      if (!doc._id || !doc.pdfId) {
-        console.warn('Invalid document structure:', doc)
-      }
-      
-      return safeDoc
-    })
+      };
 
-    console.log('Processed invoices:', safeInvoices)
-    
-    return NextResponse.json(safeInvoices)
+      if (!doc._id || !doc.pdfId) {
+        console.warn('Invalid document structure:', doc);
+      }
+
+      return safeDoc;
+    });
+
+    console.log('Processed invoices:', safeInvoices);
+
+    return NextResponse.json(safeInvoices);
 
   } catch (error) {
     console.error('API Error:', {
       message: error.message,
       stack: error.stack,
       timestamp: new Date().toISOString()
-    })
-    
+    });
+
     return NextResponse.json(
       { 
         error: 'Failed to process request',
@@ -97,6 +92,7 @@ export async function GET(request) {
           : error.message
       },
       { status: 500 }
-    )
+    );
   }
 }
+
