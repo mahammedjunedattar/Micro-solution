@@ -102,7 +102,7 @@ export async function POST(req) {
 
           await collection.insertOne({
             _id: invoiceId,
-            user: user._id,
+            user: user.id,
             client: {
               name: client.name,
               email: client.email,
