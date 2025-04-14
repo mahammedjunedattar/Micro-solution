@@ -2,9 +2,8 @@ import NextAuth from 'next-auth';
 import CredentialsProvider from 'next-auth/providers/credentials';
 import { MongoClient } from 'mongodb';
 import bcrypt from 'bcryptjs';
-const jwtSecret = 'Abbaammi@123';
 
-const uri = 'mongodb+srv://junedattar455:Abbaammi123@cluster0.ladkaob.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0';
+const uri = process.env.MONGODB_URI;
 const clientPromise = new MongoClient(uri).connect();
 
 export const authOptions = {
@@ -23,9 +22,8 @@ export const authOptions = {
         try {
           const client = await clientPromise;
           const db = client.db('reminder');
-          
-          const user = await db.collection('reminder-user').findOne({ 
-            email: credentials.email 
+          const user = await db.collection('reminder-user').findOne({
+            email: credentials.email
           });
 
           if (!user) {
@@ -57,32 +55,32 @@ export const authOptions = {
       },
     }),
   ],
-
   callbacks: {
     async jwt({ token, user }) {
       if (user) {
         token.id = user.id;
         token.email = user.email;
         token.role = user.role;
+        token.name = user.name;
       }
       return token;
     },
     async session({ session, token }) {
-      if (token?.id) {
-        session.user = {
-          id: token.id,
-          email: token.email,
-          role: token.role
-        };
-      }
+      session.user = {
+        id: token.id,
+        email: token.email,
+        name: token.name,
+        role: token.role
+      };
       return session;
-    },
+    }
   },
-  secret: jwtSecret|| 'your-fallback-secret',
   pages: {
     signIn: '/login',
     error: '/login/error'
-  }
+  },
+  secret: process.env.NEXTAUTH_SECRET,
+  debug: process.env.NODE_ENV === 'development'
 };
 
 const handler = NextAuth(authOptions);
