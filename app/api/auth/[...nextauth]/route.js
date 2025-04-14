@@ -1,3 +1,4 @@
+// app/api/auth/[...nextauth]/route.js
 import NextAuth from 'next-auth';
 import CredentialsProvider from 'next-auth/providers/credentials';
 import { MongoClient } from 'mongodb';
@@ -9,7 +10,7 @@ const clientPromise = new MongoClient(uri).connect();
 export const authOptions = {
   session: {
     strategy: 'jwt',
-    maxAge: 7 * 24 * 60 * 60, // 1 week
+    maxAge: 7 * 24 * 60 * 60,
   },
   providers: [
     CredentialsProvider({
@@ -22,12 +23,16 @@ export const authOptions = {
         try {
           const client = await clientPromise;
           const db = client.db('reminder');
-          const user = await db.collection('reminder-user').findOne({
-            email: credentials.email
+          
+          // Case-sensitive email search
+          const user = await db.collection('reminder-user').findOne({ 
+            email: credentials.email 
           });
 
+          console.log('Found user:', user); // Debug log
+
           if (!user) {
-            console.log('User not found:', credentials.email);
+            console.log('No user found for email:', credentials.email);
             return null;
           }
 
@@ -35,6 +40,8 @@ export const authOptions = {
             credentials.password,
             user.password
           );
+
+          console.log('Password valid:', isValid); // Debug log
 
           if (!isValid) {
             console.log('Invalid password for:', credentials.email);
@@ -80,7 +87,7 @@ export const authOptions = {
     error: '/login/error'
   },
   secret: process.env.NEXTAUTH_SECRET,
-  debug: process.env.NODE_ENV === 'development'
+  debug: true // Enable debug logs
 };
 
 const handler = NextAuth(authOptions);
