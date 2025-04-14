@@ -5,35 +5,34 @@ import { MongoClient } from 'mongodb'
 import { authOptions } from '@/app/api/auth/[...nextauth]/route'
 
 const uri = process.env.MONGODB_URI
-
-// Simplified connection handling with connection pooling
 let cachedDb = null
 
 async function connectToDatabase() {
-  if (cachedDb) return cachedDb;
-
-  const client = new MongoClient(uri, {
-    useNewUrlParser: true,
-    useUnifiedTopology: true,
-  });
-
-  await client.connect();
-  cachedDb = client.db('invoice');  // Return database instance directly
-  return cachedDb;
+  if (cachedDb) return cachedDb
+  const client = new MongoClient(uri)
+  await client.connect()
+  cachedDb = client.db('invoice')
+  return cachedDb
 }
 
 export async function GET(request) {
   try {
-    // Verify user session
+    const session = await getServerSession(authOptions)
+    if (!session) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
 
     const db = await connectToDatabase()
-    
-    // Convert string ID to ObjectId for query
+
+    const pdfId = '67d133a2a9934c77a06aeacd'
+    if (!ObjectId.isValid(pdfId)) {
+      throw new Error('Invalid ObjectId format')
+    }
 
     const rawInvoices = await db.collection('invoice-collection')
       .find({ 
-        user: 'USER_ID',
-        pdfId: new ObjectId('67d133a2a9934c77a06aeacd')
+        user: session.user.id, 
+        pdfId: new ObjectId(pdfId) 
       })
       .project({
         _id: 1,
@@ -48,33 +47,20 @@ export async function GET(request) {
       .sort({ dueDate: 1 })
       .toArray()
 
-    // 2. Add validation for MongoDB data types
-    const safeInvoices = rawInvoices.map(doc => {
-      // Handle potential missing fields
-      const safeDoc = {
-        _id: doc._id?.toString() || '',
-        pdfId: doc.pdfId?.toString() || '',
-        number: doc.number || 0,
-        client: {
-          name: doc.client?.name || 'Unknown Client'
-        },
-        amount: doc.amount || 0,
-        dueDate: doc.dueDate?.toISOString() || new Date().toISOString(),
-        status: doc.status || 'draft',
-        reminders: doc.reminders || [],
-        createdAt: doc.createdAt?.toISOString() || new Date().toISOString()
-      }
-      
-      // Log problematic documents
-      if (!doc._id || !doc.pdfId) {
-        console.warn('Invalid document structure:', doc)
-      }
-      
-      return safeDoc
-    })
+    const safeInvoices = rawInvoices.map(doc => ({
+      _id: doc._id?.toString() || '',
+      pdfId: doc.pdfId?.toString() || '',
+      number: doc.number || 0,
+      client: {
+        name: doc.client?.name || 'Unknown Client'
+      },
+      amount: doc.amount || 0,
+      dueDate: doc.dueDate?.toISOString() || new Date().toISOString(),
+      status: doc.status || 'draft',
+      reminders: doc.reminders || [],
+      createdAt: doc.createdAt?.toISOString() || new Date().toISOString()
+    }))
 
-    console.log('Processed invoices:', safeInvoices)
-    
     return NextResponse.json(safeInvoices)
 
   } catch (error) {
@@ -83,9 +69,9 @@ export async function GET(request) {
       stack: error.stack,
       timestamp: new Date().toISOString()
     })
-    
+
     return NextResponse.json(
-      { 
+      {
         error: 'Failed to process request',
         details: error.message.includes("ObjectId") 
           ? "Invalid ID format" 
@@ -95,3 +81,4 @@ export async function GET(request) {
     )
   }
 }
+
