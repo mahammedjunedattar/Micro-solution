@@ -24,32 +24,32 @@ export default function LoginPage() {
     fetchCsrfToken()
   }, [])
   
-  const handleLogin = async (e) => {
-    e.preventDefault();
-    setError('');
-  
-    try {
-      const result = await signIn('credentials', {
-        email,
-        password,
-        redirect: false
-      });
-  
-      console.log('SignIn Result:', result); // Add logging
-  
-      if (result?.error) {
-        setError(result.error === 'CredentialsSignin' 
-          ? 'Invalid email or password' 
-          : `Login failed: ${result.error}`
-        );
-      } else {
-        router.push('/dashboard');
-      }
-    } catch (error) {
-      console.error('Login Error:', error);
-      setError('Connection error. Please try again.');
+const handleLogin = async (e) => {
+  e.preventDefault();
+  setError('');
+
+  try {
+    const result = await signIn('credentials', {
+      email,
+      password,
+      redirect: false
+    });
+
+    console.log('SignIn Result:', result); // Debug log
+
+    if (result?.error) {
+      setError(result.error === 'CredentialsSignin' 
+        ? 'Invalid email or password' 
+        : 'Login failed. Please try again later.'
+      );
+    } else {
+      router.push('/dashboard');
     }
-  };
+  } catch (error) {
+    console.error('Login Error:', error);
+    setError('Connection error. Please try again.');
+  }
+};
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50">
       <div className="bg-white p-8 rounded-lg shadow-md w-full max-w-md">
