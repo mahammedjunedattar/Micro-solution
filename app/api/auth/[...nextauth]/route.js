@@ -1,80 +1,89 @@
-import NextAuth from 'next-auth'
-import CredentialsProvider from 'next-auth/providers/credentials'
-import { PrismaAdapter } from '@next-auth/prisma-adapter'
-import { PrismaClient } from '@prisma/client'
-import bcrypt from 'bcryptjs'
+import NextAuth from 'next-auth';
+import CredentialsProvider from 'next-auth/providers/credentials';
+import { MongoClient } from 'mongodb';
+import bcrypt from 'bcryptjs';
+const jwtSecret = 'Abbaammi@123';
 
-const prisma = new PrismaClient()
+const uri = 'mongodb+srv://junedattar455:Abbaammi123@cluster0.ladkaob.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0';
+const clientPromise = new MongoClient(uri).connect();
 
 export const authOptions = {
-  adapter: PrismaAdapter(prisma),
+  session: {
+    strategy: 'jwt',
+    maxAge: 7 * 24 * 60 * 60, // 1 week
+  },
   providers: [
     CredentialsProvider({
       name: 'Credentials',
       credentials: {
-        email: { label: "Email", type: "email" },
-        password: { label: "Password", type: "password" }
+        email: { label: 'Email', type: 'email' },
+        password: { label: 'Password', type: 'password' },
       },
       async authorize(credentials) {
         try {
-          if (!credentials?.email || !credentials?.password) {
-            return null // Return null instead of throwing error
-          }
+          const client = await clientPromise;
+          const db = client.db('reminder');
+          
+          const user = await db.collection('reminder-user').findOne({ 
+            email: credentials.email 
+          });
 
-          const user = await prisma.user.findUnique({
-            where: { email: credentials.email }
-          })
-          console.log(user)
-
-          if (!user || !user.password) {
-            return null
+          if (!user) {
+            console.log('User not found:', credentials.email);
+            return null;
           }
 
           const isValid = await bcrypt.compare(
             credentials.password,
             user.password
-          )
+          );
 
           if (!isValid) {
-            return null
+            console.log('Invalid password for:', credentials.email);
+            return null;
           }
 
           return {
-            id: user.id,
+            id: user._id.toString(),
             email: user.email,
-            name: user.name
-          }
+            name: user.name || '',
+            role: user.role || 'user'
+          };
+          
         } catch (error) {
-          console.error('Authorization error:', error)
-          return null
+          console.error('Authentication error:', error);
+          return null;
         }
-      }
-    })
+      },
+    }),
   ],
-  session: {
-    strategy: 'jwt'
-  },
-  pages: {
-    signIn: '/login',
-    error: 
-  },
+
   callbacks: {
     async jwt({ token, user }) {
       if (user) {
-        token.id = user.id
-        token.email = user.email
+        token.id = user.id;
+        token.email = user.email;
+        token.role = user.role;
       }
-      return token
+      return token;
     },
     async session({ session, token }) {
-      session.user.id = token.id
-      session.user.email = token.email
-      return session
-    }
+      if (token?.id) {
+        session.user = {
+          id: token.id,
+          email: token.email,
+          role: token.role
+        };
+      }
+      return session;
+    },
   },
-  secret: process.env.NEXTAUTH_SECRET,
-  debug: process.env.NODE_ENV === 'development' // Enable debug in development
-}
+  secret: jwtSecret|| 'your-fallback-secret',
+  pages: {
+    signIn: '/login',
+    error: '/login/error'
+  }
+};
 
-const handler = NextAuth(authOptions)
-export { handler as GET, handler as POST }
+const handler = NextAuth(authOptions);
+export { handler as GET, handler as POST };
